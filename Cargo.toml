@@ -1,0 +1,40 @@
+[package]
+name = "gl-rs-tools"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix = "0.13.0"
+actix-cors = "0.6.1"
+actix-files = "0.6.2"
+actix-utils = "3.0.0"
+actix-web = "4.2.1"
+arraygen = "0.3.2"
+base64-url = "2.0.0"
+bstr = "1.0.0"
+calamine = "0.19.1"
+chrono = { version = "0.4.23", features = ["serde"] }
+cron_lib = { package = "cron", version = "0.12.0" }
+futures = "0.3.21"
+handlebars = { version = "4.3.3", features=["dir_source"] }
+image = { version = "0.24.5", features=["webp-encoder"] }
+infer = "0.13.0"
+lettre = "0.10.0-rc.7"
+mongodb = { version = "2.4.0", default-features = false, features = ["tokio-runtime", "bson-chrono-0_4"] }
+paseto_lib = { package = "paseto", version = "2.0.2+1.0.3" }
+pin-project = "1.0.10"
+rand = "0.8.5"
+regex = "1.7.1"
+reqwest = "0.11.13"
+rusoto_core = "0.48.0"
+rusoto_s3 = "0.48.0"
+sanitizer = "0.1.6"
+serde = { version = "1.0.137", features =["derive"] }
+serde_json = { version = "1.0.81", features = ["preserve_order"] }
+slugify = "0.1.0"
+titlecase = "2.0.0"
+validator = "0.16.0"
+user-agent-parser = "0.3.3"
+xsalsa20poly1305 = "0.9.0-pre"
