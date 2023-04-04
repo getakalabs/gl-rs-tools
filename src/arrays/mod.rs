@@ -38,3 +38,20 @@ impl<T:Clone + GetMongoObjectId + ToJson + ToBson + PartialEq> GetArrayString fo
         }
     }
 }
+
+impl<T:Clone + GetMongoObjectId + ToJson + ToBson + PartialEq> From<Vec<String>> for Array<T> {
+    fn from(value: Vec<String>) -> Self {
+        match value.is_empty() {
+            true => Self::None,
+            false => {
+                let mut array:Vec<Option<Swap<T>>> = Vec::new();
+
+                for item in value.into_iter() {
+                    array.push(Some(Swap::String(item)));
+                }
+
+                Self::SwapArray(array)
+            }
+        }
+    }
+}

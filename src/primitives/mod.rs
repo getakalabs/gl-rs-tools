@@ -102,6 +102,21 @@ impl From<String> for Primitive {
     }
 }
 
+impl From<Vec<String>> for Primitive {
+    fn from(value: Vec<String>) -> Self {
+        match value.is_empty() {
+            true => Self::None,
+            false => {
+                let mut array = Vec::new();
+                for item in value {
+                    array.push(Some(item));
+                }
+                Self::MongoArray(MongoArray::String(array))
+            }
+        }
+    }
+}
+
 impl From<i32> for Primitive {
     fn from(value: i32) -> Self {
         Self::I32(value)

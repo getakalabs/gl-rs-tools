@@ -34,7 +34,7 @@ impl DBClient {
     }
 
     // Retrieve mongodb environment variables
-    fn get_config<DBU, DBN>(database_url: DBU, database_name: DBN) -> Option<(String, String)>
+    pub fn get_config<DBU, DBN>(database_url: DBU, database_name: DBN) -> Option<(String, String)>
         where DBU: ToString,
               DBN: ToString
     {

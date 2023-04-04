@@ -4,7 +4,7 @@ pub mod mutations;
 use arraygen::Arraygen;
 use actix_web::{ http::header, web::{Bytes, BytesMut, Data}, HttpRequest, HttpResponse };
 use bstr::ByteSlice;
-use futures::TryStreamExt;
+use futures::{TryStreamExt};
 use handlebars::Handlebars;
 use image::{GenericImageView, ImageFormat, Rgba};
 use image::imageops::FilterType;
@@ -322,6 +322,32 @@ impl S3 {
         HttpResponse::Ok()
             .content_type(content_type)
             .streaming(body.unwrap().map_ok(|chunk| chunk))
+    }
+
+    pub async fn get_bytes<T>(&self, filename: T) -> Result<Vec<u8>, Errors>
+        where T: ToString
+    {
+        // Create bindings
+        let bindings = filename.to_string();
+
+        // Retrieve client
+        let client = match self.get_client() {
+            None => return Err(Errors::new("S3 client is not available")),
+            Some(client) => client
+        };
+
+        // Retrieve item
+        match client.get_object(GetObjectRequest{
+            bucket: self.get_bucket(),
+            key: format!("{}/{}", self.get_path().as_str(), bindings),
+            ..Default::default()
+        }).await {
+            Err(_) => Err(Errors::new("Unable to retrieve your file")),
+            Ok(data) => {
+                let bytes = data.body.unwrap().map_ok(|b| BytesMut::from(&b[..])).try_concat().await.unwrap();
+                Ok(bytes.to_vec())
+            }
+        }
     }
 
     pub async fn delete(&self, file: &Asset) -> Result<(), Errors> {
