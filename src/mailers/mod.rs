@@ -1,8 +1,9 @@
 pub mod mutations;
 
 use arraygen::Arraygen;
+use infer::Infer;
 use lettre::{Message, SmtpTransport, Transport};
-use lettre::message::{header, MultiPart, SinglePart};
+use lettre::message::{header::ContentType, Attachment, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
@@ -186,9 +187,97 @@ impl Mailer {
         let multipart = MultiPart::alternative()
             .singlepart(
                 SinglePart::builder()
-                    .header(header::ContentType::TEXT_HTML)
+                    .header(ContentType::TEXT_HTML)
                     .body(body)
             );
+
+        // Create email builder
+        let builder = match Message::builder()
+            .from(sender.parse().unwrap())
+            .to(to.parse().unwrap())
+            .subject(subject)
+            .multipart(multipart) {
+            Ok(builder) => builder,
+            Err(error) =>  return Err(Errors::new(&error))
+        };
+
+        // Set credentials
+        let credentials = Credentials::new(username, password);
+
+        // Set smtp transport relay
+        let relay = match SmtpTransport::relay(smtp_host.as_str()) {
+            Ok(relay) => relay,
+            Err(error) => return Err(Errors::new(&error))
+        };
+
+        // Open a remote connection
+        let mailer = relay.credentials(credentials).build();
+
+        // Send the email
+        match mailer.send(&builder) {
+            Ok(_) => Ok(format!("Email send successfully to {to}")),
+            Err(e) => Err(Errors::new(&e)),
+        }
+    }
+
+    pub fn send_mail_with_attachments<T, S, B, F, N>(&self, to: T, subject: S, body: B, attachments: &[(F, N)]) -> Result<String, Errors>
+        where T: ToString,
+              S: ToString,
+              B: ToString,
+              F: ToString,
+              N: ToString
+    {
+        // Set bindings
+        let to = to.to_string();
+        let subject = subject.to_string();
+        let body = body.to_string();
+
+        // Retrieve values
+        let data = match self.to_json() {
+            None => return Err(Errors::new("Your platform's email configuration is invalid. Please contact your administrator")),
+            Some(value) => value
+        };
+
+        let sender = data.sender.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
+        let username = data.username.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
+        let password = data.password.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
+        let smtp_host = data.smtp_host.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
+
+        // Check if self has data
+        if sender.is_empty() || to.is_empty() || subject.is_empty() || body.is_empty() {
+            return Err(Errors::new("Your platform's email configuration is invalid. Please contact your administrator"));
+        }
+
+        // Create multipart body
+        let mut multipart = MultiPart::mixed()
+            .singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_HTML)
+                    .body(body)
+            );
+
+        // Check if file exists
+        for (f, n) in attachments {
+            let filename = f.to_string();
+            let name = n.to_string();
+            match std::fs::read(&filename) {
+                Ok(file) => {
+                    // Check out mime type
+                    let info = Infer::new();
+                    match ContentType::parse(&info
+                        .get(&file.clone())
+                        .map_or(String::default(), |t| String::from(t.mime_type()))) {
+                        Ok(content_type) => {
+                            multipart = multipart.singlepart(
+                                Attachment::new(name).body(file, content_type)
+                            );
+                        },
+                        Err(_) => continue
+                    };
+                },
+                Err(_) => continue
+            };
+        }
 
         // Create email builder
         let builder = match Message::builder()
