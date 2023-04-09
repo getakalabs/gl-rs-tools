@@ -13,8 +13,16 @@ pub trait Encrypt {
     fn encrypt(&self) -> Self;
 }
 
+pub trait GetArrayObjectId {
+    fn get_array_object_id(&self) -> Option<Vec<MongoObjectId>>;
+}
+
 pub trait GetArrayString {
     fn get_array_string(&self) -> Option<Vec<String>>;
+}
+
+pub trait GetArrayValue<T: Clone + GetMongoObjectId + ToJson + ToBson> {
+    fn get_array_value(&self) -> Option<Vec<T>> where T: Sized;
 }
 
 pub trait GetI32 {
@@ -23,6 +31,10 @@ pub trait GetI32 {
 
 pub trait GetI64 {
     fn get_i64(&self) -> Option<i64>;
+}
+
+pub trait GetF64 {
+    fn get_f64(&self) -> Option<f64>;
 }
 
 pub trait GetBool {
@@ -51,6 +63,10 @@ pub trait GetObjectIds {
 
 pub trait GetSwapValue<T: Clone + GetMongoObjectId + ToJson + ToBson> {
     fn get_swap_value(&self) -> Option<T> where T: Sized;
+}
+
+pub trait GetSwitchValue<T: Clone + PartialEq> {
+    fn get_switch_value(&self) -> Option<T> where T: Sized;
 }
 
 pub trait GetString {
@@ -110,6 +126,10 @@ pub trait SetToI32 {
 
 pub trait SetToI64 {
     fn set_to_i64(&self) -> Self;
+}
+
+pub trait SetToF64 {
+    fn set_to_f64(&self) -> Self;
 }
 
 pub trait SetToBool {
