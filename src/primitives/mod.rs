@@ -146,6 +146,12 @@ impl GetI32 for Primitive {
     fn get_i32(&self) -> Option<i32> {
         match self.set_to_i32() {
             Self::I32(value) => Some(value),
+            Self::I64(value) => Some(value as i32),
+            Self::F64(value) => Some(value as i32),
+            Self::String(value) => match value.parse::<i32>() {
+                Ok(value) => Some(value),
+                Err(_) => None
+            },
             _ => None
         }
     }
@@ -154,7 +160,13 @@ impl GetI32 for Primitive {
 impl GetI64 for Primitive {
     fn get_i64(&self) -> Option<i64> {
         match self.set_to_i64() {
+            Self::I32(value) => Some(value as i64),
             Self::I64(value) => Some(value),
+            Self::F64(value) => Some(value as i64),
+            Self::String(value) => match value.parse::<i64>() {
+                Ok(value) => Some(value),
+                Err(_) => None
+            },
             _ => None
         }
     }
@@ -163,7 +175,13 @@ impl GetI64 for Primitive {
 impl GetF64 for Primitive {
     fn get_f64(&self) -> Option<f64> {
         match self.set_to_f64() {
+            Self::I32(value) => Some(value as f64),
+            Self::I64(value) => Some(value as f64),
             Self::F64(value) => Some(value),
+            Self::String(value) => match value.parse::<f64>() {
+                Ok(value) => Some(value),
+                Err(_) => None
+            },
             _ => None
         }
     }
