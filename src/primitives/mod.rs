@@ -250,8 +250,8 @@ impl SetToF64 for Primitive {
             Self::I32(value) => Self::F64(value as f64),
             Self::I64(value) => Self::F64(value as f64),
             Self::F64(value) => Self::F64(value),
-            Self::String(value) => match value.parse::<i64>() {
-                Ok(value) => Self::I64(value),
+            Self::String(value) => match value.parse::<f64>() {
+                Ok(value) => Self::F64(value),
                 Err(_) => Self::None
             },
             _ => Self::None
@@ -277,7 +277,13 @@ impl SetToMongoArray for Primitive {
     fn set_to_mongo_array(&self) -> Self {
         match self.clone() {
             Self::MongoArray(value) => Self::MongoArray(value),
-            Self::String(value) => Self::MongoArray(MongoArray::from(value)),
+            Self::String(value) => {
+                let value = serde_json::from_str::<Vec<Option<String>>>(&value);
+                match value {
+                    Ok(value) => Self::MongoArray(MongoArray::String(value)),
+                    Err(_) => Self::None
+                }
+            },
             _ => Self::None
         }
     }

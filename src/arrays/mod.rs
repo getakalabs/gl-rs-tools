@@ -1,4 +1,6 @@
+use std::str::FromStr;
 use serde::{Serialize, Deserialize};
+use crate::paseto::ObjectId;
 
 use crate::traits::prelude::*;
 use crate::Swap;
@@ -18,6 +20,29 @@ impl<T:Clone + GetMongoObjectId + ToJson + ToBson + PartialEq> Default for Array
     }
 }
 
+impl<T:Clone + GetMongoObjectId + ToJson + ToBson + PartialEq> GetObjectIds for Array<T> {
+    fn get_object_ids(&self) -> Option<Vec<ObjectId>> {
+        match self.get_array_string() {
+            Some(value) => {
+                let mut array:Vec<ObjectId> = Vec::new();
+
+                for item in value.into_iter() {
+                    match ObjectId::from_str(&item) {
+                        Ok(value) => array.push(value),
+                        Err(_) => {}
+                    }
+                }
+
+                match array.is_empty() {
+                    true => None,
+                    false => Some(array)
+                }
+            },
+            None => None
+        }
+    }
+}
+
 impl<T:Clone + GetMongoObjectId + ToJson + ToBson + PartialEq> GetArrayString for Array<T> {
     fn get_array_string(&self) -> Option<Vec<String>> {
         match self.clone() {
@@ -33,6 +58,15 @@ impl<T:Clone + GetMongoObjectId + ToJson + ToBson + PartialEq> GetArrayString fo
                 match array.is_empty() {
                     true => None,
                     false => Some(array)
+                }
+            },
+            Self::String(value) => {
+                match value.to_lowercase().as_str() == "none" {
+                    true => None,
+                    false => match serde_json::from_str::<Vec<String>>(&value) {
+                        Ok(value) => Some(value),
+                        Err(_) => None
+                    }
                 }
             },
             _ => None
