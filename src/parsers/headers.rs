@@ -1,16 +1,16 @@
+use std::ops::Index;
+use anyhow::Result;
 use std::str::FromStr;
 use actix_web::http::header::HeaderValue;
 
-use crate::Errors;
-
 // Parse range header to get start and end
 // Author: Deneir
-pub fn get(range_header: &HeaderValue) -> Result<(usize, usize), Errors> {
+pub fn get(range_header: &HeaderValue) -> Result<(usize, usize)> {
     let s = range_header.to_str().unwrap();
     let prefix = "bytes=";
 
     if !s.starts_with(prefix) {
-        return Err(Errors::new("Range header doesn't start with 'bytes='"));
+        return Err(anyhow::anyhow!("Range header doesn't start with 'bytes='"));
     }
 
     let split = (s[prefix.len()..])
@@ -19,16 +19,11 @@ pub fn get(range_header: &HeaderValue) -> Result<(usize, usize), Errors> {
         .collect::<Vec<String>>();
 
     if split.len() != 2 {
-        return Err(Errors::new("Range header doesn't have exactly two parts"));
+        return Err(anyhow::anyhow!("Range header has an invalid format"));
     }
 
-    let start = match usize::from_str(&split[0]) {
-        Ok(s) => s,
-        Err(_) => return Err(Errors::new("Range header has an invalid start index")),
-    };
+    let start = usize::from_str(split.index(0))?;
+    let end = usize::from_str(split.index(1))?;
 
-    match usize::from_str(&split[1]) {
-        Ok(end) => Ok((start, end)),
-        Err(_) => Err(Errors::new("Range header has an invalid end index")),
-    }
+    Ok((start, end))
 }

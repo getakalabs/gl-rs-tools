@@ -1,310 +1,155 @@
+pub mod impls;
 pub mod mutations;
+pub mod stages;
 
 use arraygen::Arraygen;
-use infer::Infer;
-use lettre::{Message, SmtpTransport, Transport};
-use lettre::message::{header::ContentType, Attachment, MultiPart, SinglePart};
-use lettre::transport::smtp::authentication::Credentials;
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use mongodb::bson::{Bson, Document};
+use sanitizer::prelude::*;
+use serde::{Serialize, Deserialize};
+use std::default::Default;
 
 use crate::traits::prelude::*;
 use crate::Cipher;
-use crate::DBClient;
-use crate::Errors;
-use crate::Module;
 use crate::Settings;
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Arraygen)]
-#[gen_array(fn get_ciphers: &mut Option<Cipher>)]
+#[derive(Debug, Default, Clone, PartialEq, Sanitize, Serialize, Deserialize, Arraygen)]
+#[gen_array(fn get_array_ciphers: &mut Option<Cipher>)]
 pub struct Mailer {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[in_array(get_ciphers)]
+    #[in_array(get_array_ciphers)]
     pub sender: Option<Cipher>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[in_array(get_ciphers)]
+    #[in_array(get_array_ciphers)]
     pub username: Option<Cipher>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[in_array(get_ciphers)]
+    #[in_array(get_array_ciphers)]
     pub password: Option<Cipher>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[in_array(get_ciphers)]
+    #[in_array(get_array_ciphers)]
     pub smtp_host: Option<Cipher>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[in_array(get_ciphers)]
+    #[in_array(get_array_ciphers)]
     pub service: Option<Cipher>,
 }
 
-impl IsEmpty for Mailer {
-    fn is_empty(&self) -> bool {
-        self.clone() == Self::default()
-    }
-}
-
 impl Decrypt for Mailer {
-    fn decrypt(&self) -> Self {
+    fn decrypt(&self) -> Option<Self> {
         let mut data = self.clone();
 
-        for cipher in data.get_ciphers() {
-            *cipher = cipher.clone().and_then(|d| {
-                match d.is_empty() {
-                    true => None,
-                    false => d.decrypt_master()
+        for cipher in data.get_array_ciphers() {
+            *cipher = cipher.clone().and_then(|d| match d.is_empty() {
+                true => None,
+                false => match d.decrypt_master() {
+                    Ok(d) => Some(d.set_to_string()),
+                    Err(_) => Some(d.set_to_string())
                 }
             });
-        }
-
-        data
-    }
-}
-
-impl Encrypt for Mailer {
-    fn encrypt(&self) -> Self {
-        let mut data = self.clone();
-
-        for cipher in data.get_ciphers() {
-            *cipher = cipher.clone().and_then(|d| {
-                match d.is_empty() {
-                    true => None,
-                    false => d.encrypt_master()
-                }
-            });
-        }
-
-        data
-    }
-}
-
-impl ToBson for Mailer {
-    fn to_bson(&self) -> Option<Self> {
-        let mut data = self.clone();
-
-        for cipher in data.get_ciphers() {
-            *cipher = match cipher {
-                None => None,
-                Some(data) => {
-                    match data.is_empty() {
-                        true => None,
-                        false => data.encrypt_master()
-                    }
-                }
-            };
         }
 
         match data.is_empty() {
             true => None,
             false => Some(data)
+        }
+    }
+}
+
+impl Encrypt for Mailer {
+    fn encrypt(&self) -> Option<Self> {
+        let mut data = self.clone();
+
+        for cipher in data.get_array_ciphers() {
+            *cipher = cipher.clone().and_then(|d| match d.is_empty() {
+                true => None,
+                false => match d.encrypt_master() {
+                    Ok(d) => Some(d),
+                    Err(_) => Some(d)
+                }
+            });
+        }
+
+        match data.is_empty() {
+            true => None,
+            false => Some(data)
+        }
+    }
+}
+
+impl From<Mailer> for Bson {
+    fn from(value: Mailer) -> Self {
+        Bson::Document(value.into())
+    }
+}
+
+impl From<Mailer> for Document {
+    fn from(value: Mailer) -> Document {
+        match value.is_empty() {
+            true => Document::new(),
+            false => {
+                let mut doc = Document::new();
+                doc.insert("sender", Bson::from(value.sender));
+                doc.insert("username", Bson::from(value.username));
+                doc.insert("password", Bson::from(value.password));
+                doc.insert("smtp_host", Bson::from(value.smtp_host));
+                doc.insert("service", Bson::from(value.service));
+                doc
+            }
+        }
+    }
+}
+
+impl From<Settings> for Mailer {
+    fn from(value: Settings) -> Self {
+        let sender = Cipher::from(value.sender.map_or(String::default(), |d| d));
+        let username = Cipher::from(value.username.map_or(String::default(), |d| d));
+        let password = Cipher::from(value.password.map_or(String::default(), |d| d));
+        let smtp_host = Cipher::from(value.smtp_host.map_or(String::default(), |d| d));
+        let service = Cipher::from(value.service.map_or(String::default(), |d| d));
+
+        Self {
+            sender: Some(sender),
+            username: Some(username),
+            password: Some(password),
+            smtp_host: Some(smtp_host),
+            service: Some(service)
+        }
+    }
+}
+
+impl From<&Settings> for Mailer {
+    fn from(value: &Settings) -> Self {
+        Self::from(value.clone())
+    }
+}
+
+impl IsEmpty for Mailer {
+    fn is_empty(&self) -> bool {
+        Self::default() == *self
+    }
+}
+
+impl ToBson for Mailer {
+    fn to_bson(&self) -> Option<Self> {
+        match self.is_empty() {
+            true => None,
+            false => self.encrypt()
         }
     }
 }
 
 impl ToJson for Mailer {
     fn to_json(&self) -> Option<Self> {
-        let mut data = self.clone();
-
-        for cipher in data.get_ciphers() {
-            *cipher = match cipher {
-                None => None,
-                Some(data) => {
-                    match data.is_empty() {
-                        true => None,
-                        false => {
-                            let data = data.set_to_string();
-                            match data.is_empty() {
-                                true => None,
-                                false => Some(data)
-                            }
-                        }
-                    }
-                }
-            };
-        }
-
-        match data.is_empty() {
+        match self.is_empty() {
             true => None,
-            false => Some(data)
+            false => self.decrypt()
         }
     }
 }
 
-impl Mailer {
-    pub fn new(form: &Settings) -> Self {
-        Self {
-            sender: Cipher::new(form.get_sender()),
-            username: Cipher::new(form.get_username()),
-            password: Cipher::new(form.get_password()),
-            smtp_host: Cipher::new(form.get_smtp_host()),
-            service: Cipher::new(form.get_service()),
-        }
-    }
-
-    pub async fn stage(client: &DBClient) -> Arc<RwLock<Mailer>> {
-        let db = match client.get_db() {
-            None => return Arc::new(RwLock::new(Mailer::default())),
-            Some(client) => client
-        };
-
-        let settings = match Settings::read_from_module(&db, &Module::Mailer).await {
-            Ok(settings) => settings,
-            Err(_) => return Arc::new(RwLock::new(Mailer::default()))
-        };
-
-        let data = settings
-            .mailer
-            .map_or(Mailer::default(), |d| d.decrypt());
-
-        Arc::new(RwLock::new(data))
-    }
-
-    pub fn send_mail<T, S, B>(&self, to: T, subject: S, body: B) -> Result<String, Errors>
-        where T: ToString,
-              S: ToString,
-              B: ToString
-    {
-        // Set bindings
-        let to = to.to_string();
-        let subject = subject.to_string();
-        let body = body.to_string();
-
-        // Retrieve values
-        let data = match self.to_json() {
-            None => return Err(Errors::new("Your platform's email configuration is invalid. Please contact your administrator")),
-            Some(value) => value
-        };
-
-        let sender = data.sender.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-        let username = data.username.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-        let password = data.password.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-        let smtp_host = data.smtp_host.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-
-        // Check if self has data
-        let is_empty = sender.is_empty() || to.is_empty() || subject.is_empty() || body.is_empty();
-        if is_empty {
-            return Err(Errors::new("Your platform's email configuration is invalid. Please contact your administrator"));
-        }
-
-        // Create multipart body
-        let multipart = MultiPart::alternative()
-            .singlepart(
-                SinglePart::builder()
-                    .header(ContentType::TEXT_HTML)
-                    .body(body)
-            );
-
-        // Create email builder
-        let builder = match Message::builder()
-            .from(sender.parse().unwrap())
-            .to(to.parse().unwrap())
-            .subject(subject)
-            .multipart(multipart) {
-            Ok(builder) => builder,
-            Err(error) =>  return Err(Errors::new(&error))
-        };
-
-        // Set credentials
-        let credentials = Credentials::new(username, password);
-
-        // Set smtp transport relay
-        let relay = match SmtpTransport::relay(smtp_host.as_str()) {
-            Ok(relay) => relay,
-            Err(error) => return Err(Errors::new(&error))
-        };
-
-        // Open a remote connection
-        let mailer = relay.credentials(credentials).build();
-
-        // Send the email
-        match mailer.send(&builder) {
-            Ok(_) => Ok(format!("Email send successfully to {to}")),
-            Err(e) => Err(Errors::new(&e)),
-        }
-    }
-
-    pub fn send_mail_with_attachments<T, S, B, F, N>(&self, to: T, subject: S, body: B, attachments: &[(F, N)]) -> Result<String, Errors>
-        where T: ToString,
-              S: ToString,
-              B: ToString,
-              F: ToString,
-              N: ToString
-    {
-        // Set bindings
-        let to = to.to_string();
-        let subject = subject.to_string();
-        let body = body.to_string();
-
-        // Retrieve values
-        let data = match self.to_json() {
-            None => return Err(Errors::new("Your platform's email configuration is invalid. Please contact your administrator")),
-            Some(value) => value
-        };
-
-        let sender = data.sender.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-        let username = data.username.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-        let password = data.password.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-        let smtp_host = data.smtp_host.map_or(String::default(), |d| d.to_string().unwrap_or(String::default()));
-
-        // Check if self has data
-        if sender.is_empty() || to.is_empty() || subject.is_empty() || body.is_empty() {
-            return Err(Errors::new("Your platform's email configuration is invalid. Please contact your administrator"));
-        }
-
-        // Create multipart body
-        let mut multipart = MultiPart::mixed()
-            .singlepart(
-                SinglePart::builder()
-                    .header(ContentType::TEXT_HTML)
-                    .body(body)
-            );
-
-        // Check if file exists
-        for (f, n) in attachments {
-            let filename = f.to_string();
-            let name = n.to_string();
-            match std::fs::read(&filename) {
-                Ok(file) => {
-                    // Check out mime type
-                    let info = Infer::new();
-                    match ContentType::parse(&info
-                        .get(&file.clone())
-                        .map_or(String::default(), |t| String::from(t.mime_type()))) {
-                        Ok(content_type) => {
-                            multipart = multipart.singlepart(
-                                Attachment::new(name).body(file, content_type)
-                            );
-                        },
-                        Err(_) => continue
-                    };
-                },
-                Err(_) => continue
-            };
-        }
-
-        // Create email builder
-        let builder = match Message::builder()
-            .from(sender.parse().unwrap())
-            .to(to.parse().unwrap())
-            .subject(subject)
-            .multipart(multipart) {
-            Ok(builder) => builder,
-            Err(error) =>  return Err(Errors::new(&error))
-        };
-
-        // Set credentials
-        let credentials = Credentials::new(username, password);
-
-        // Set smtp transport relay
-        let relay = match SmtpTransport::relay(smtp_host.as_str()) {
-            Ok(relay) => relay,
-            Err(error) => return Err(Errors::new(&error))
-        };
-
-        // Open a remote connection
-        let mailer = relay.credentials(credentials).build();
-
-        // Send the email
-        match mailer.send(&builder) {
-            Ok(_) => Ok(format!("Email send successfully to {to}")),
-            Err(e) => Err(Errors::new(&e)),
+impl ToOption for Mailer {
+    fn to_option(&self) -> Option<Self> {
+        match self.is_empty() {
+            true => None,
+            false => Some(self.clone())
         }
     }
 }

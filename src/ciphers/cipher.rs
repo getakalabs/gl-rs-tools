@@ -1,9 +1,17 @@
+use anyhow::Result;
+use mongodb::bson::Bson;
 use serde::{Serialize, Deserialize};
-use mongodb::bson::{Bson, Document};
 
-use crate::traits::prelude::*;
+use crate::traits::GetI32;
+use crate::traits::GetString;
+use crate::traits::IsEmpty;
+use crate::traits::SetToCipher;
+use crate::traits::SetToI32;
+use crate::traits::SetToString;
+use crate::traits::ToBson;
+use crate::traits::ToJson;
 
-use super::manager::Manager;
+use super::manager::CipherManager;
 use super::payload::Payload;
 
 const MASTER_KEY: &str = "MASTER_KEY";
@@ -12,7 +20,7 @@ const WEB_KEY: &str = "WEB_KEY";
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Cipher {
-    Manager(Manager),
+    CipherManager(CipherManager),
     Payload(Payload),
     String(String),
     I32(i32),
@@ -25,94 +33,65 @@ impl Default for Cipher {
     }
 }
 
+impl GetI32 for Cipher {
+    fn get_i32(&self) -> Option<i32> {
+        match self.set_to_i32() {
+            Self::I32(value) => Some(value),
+            _ => None
+        }
+    }
+}
+
+impl GetString for Cipher {
+    fn get_string(&self) -> Option<String> {
+        match self.set_to_string() {
+            Self::String(value) => match value.is_empty() {
+                true => None,
+                false => Some(value)
+            },
+            _ => None
+        }
+    }
+}
+
 impl IsEmpty for Cipher {
     fn is_empty(&self) -> bool {
-        match self.clone() == Self::default() {
-            true => true,
-            false => match self.clone() {
-                Self::String(value) => match value.to_lowercase().as_str() == "none" {
-                    true => true,
-                    false => false
-                }
-                Self::None => true,
-                _ => false
-            }
-        }
-    }
-}
-
-impl From<String> for Cipher {
-    fn from(value: String) -> Self {
-        let value = value;
-        match value.is_empty() {
-            true => Self::None,
-            false => Self::new(value).unwrap()
-        }
-    }
-}
-
-impl From<&String> for Cipher {
-    fn from(value: &String) -> Self {
-        let value = &(*value).clone();
-        match value.is_empty() {
-            true => Self::None,
-            false => Self::new(value).unwrap()
-        }
-    }
-}
-
-impl From<&str> for Cipher {
-    fn from(value: &str) -> Self {
-        let value = value;
-        match value.is_empty() {
-            true => Self::None,
-            false => Self::new(value).unwrap()
-        }
-    }
-}
-
-impl From<i32> for Cipher {
-    fn from(value: i32) -> Self {
-        Cipher::I32(value)
-    }
-}
-
-impl From<&i32> for Cipher {
-    fn from(value: &i32) -> Self {
-        Cipher::I32(*value)
-    }
-}
-
-impl<T: IsEmpty> GetSelf<T> for Cipher {}
-
-impl SetToI32 for Cipher {
-    fn set_to_i32(&self) -> Self {
         match self {
-            Self::Manager(value) => {
-                match value.clone().content { 
-                    Some(value) => match value.parse::<i32>() {
-                        Ok(value) => Self::I32(value),
-                        Err(_) => Self::None
-                    },
-                    None => Self::None
-                }
-            },
-            Self::String(value) => match value.parse::<i32>() {
-                Ok(value) => Self::I32(value),
-                Err(_) => Self::None
-            },
-            Self::I32(value) => Self::I32(*value),
+            Self::CipherManager(value) => value.is_empty(),
+            Self::Payload(value) => value.is_empty(),
+            Self::String(value) => value.is_empty(),
+            Self::None => true,
+            _ => false
+        }
+    }
+}
+
+impl SetToCipher for Cipher {
+    fn set_to_cipher(&self) -> Self {
+        match self {
+            Self::CipherManager(value) => Self::CipherManager(value.clone()),
+            Self::String(value) => Self::CipherManager(CipherManager::from(value.to_string())),
+            Self::I32(value) => Self::CipherManager(CipherManager::from(value.to_string())),
             _ => Self::None
         }
     }
 }
 
-impl SetToManager for Cipher {
-    fn set_to_manager(&self) -> Self {
+impl SetToI32 for Cipher {
+    fn set_to_i32(&self) -> Self {
         match self {
-            Self::Manager(value) => Self::Manager(value.clone()),
-            Self::String(value) => Self::Manager(Manager::new(value.clone())),
-            Self::I32(value) => Self::Manager(Manager::new(value.clone().to_string())),
+            Self::CipherManager(value) => {
+                match value.to_string().parse::<i32>() {
+                    Ok(value) => Self::I32(value),
+                    Err(_) => Self::None
+                }
+            }
+            Self::String(value) => {
+                match value.parse::<i32>() {
+                    Ok(value) => Self::I32(value),
+                    Err(_) => Self::None
+                }
+            },
             _ => Self::None
         }
     }
@@ -120,10 +99,10 @@ impl SetToManager for Cipher {
 
 impl SetToString for Cipher {
     fn set_to_string(&self) -> Self {
-        match self.clone() {
-            Self::Manager(value) => Self::String(value.content.unwrap_or(String::default())),
-            Self::String(value) => Self::String(value),
-            Self::I32(value) => Self::String(value.clone().to_string()),
+        match self {
+            Self::CipherManager(value) => Self::String(value.to_string()),
+            Self::I32(value) => Self::String(value.to_string()),
+            Self::String(value) => Self::String(value.to_string()),
             _ => Self::None
         }
     }
@@ -131,8 +110,8 @@ impl SetToString for Cipher {
 
 impl ToBson for Cipher {
     fn to_bson(&self) -> Option<Self> {
-        match self.clone().set_to_manager() {
-            Self::Manager(_) => Some(self.clone()),
+        match self.set_to_cipher() {
+            Self::CipherManager(value) => Some(Self::CipherManager(value)),
             _ => None
         }
     }
@@ -140,39 +119,8 @@ impl ToBson for Cipher {
 
 impl ToJson for Cipher {
     fn to_json(&self) -> Option<Self> {
-        match self.clone().set_to_string() {
-            Self::String(_) => Some(self.clone()),
-            _ => None
-        }
-    }
-}
-
-impl ToString for Cipher {
-    fn to_string(&self) -> String {
-        match self.clone() {
-            Self::Manager(value) => value.content.unwrap_or(String::default()),
-            Self::String(value) => value,
-            Self::I32(value) => value.clone().to_string(),
-            _ => String::default()
-        }
-    }
-}
-
-impl ToOptString for Cipher {
-    fn to_opt_string(&self) -> Option<String> {
-        match self {
-            Self::Manager(value) => match value.clone().content {
-                Some(value) => match value.is_empty() {
-                    true => None,
-                    false => Some(value)
-                },
-                None => None
-            },
-            Self::String(value) =>match value.is_empty() {
-                true => None,
-                false => Some(value.clone())
-            },
-            Self::I32(value) => Some(value.clone().to_string()),
+        match self.set_to_string() {
+            Self::String(value) => Some(Self::String(value)),
             _ => None
         }
     }
@@ -181,146 +129,131 @@ impl ToOptString for Cipher {
 impl From<Cipher> for Bson {
     fn from(value: Cipher) -> Self {
         match value {
-            Cipher::Manager(value) => {
-                let mut doc = Document::new();
+            Cipher::CipherManager(value) => Bson::from(value),
+            Cipher::String(value) => Bson::from(value),
+            Cipher::I32(value) => Bson::from(value),
+            _ => Bson::Null
+        }
+    }
+}
 
-                doc.insert("content", value.content);
-                doc.insert("hash", value.hash);
-                doc.insert("is_encrypted", value.is_encrypted);
+impl From<Payload> for Cipher {
+    fn from(value: Payload) -> Self {
+        match value.is_empty() {
+            true => Self::None,
+            false => Self::Payload(value)
+        }
+    }
+}
 
-                Bson::Document(doc)
-            },
-            Cipher::Payload(value) => {
-                let mut doc = Document::new();
+impl From<&Payload> for Cipher {
+    fn from(value: &Payload) -> Self {
+        Self::Payload(value.clone())
+    }
+}
 
-                doc.insert("minimum", value.minimum);
-                doc.insert("maximum", value.maximum);
-                doc.insert("uppercase", value.uppercase);
-                doc.insert("lowercase", value.lowercase);
-                doc.insert("number", value.number);
-                doc.insert("special_character", value.special_character);
+impl From<String> for Cipher {
+    fn from(value: String) -> Self {
+        match value.is_empty() {
+            true => Self::None,
+            false => Self::new(value)
+        }
+    }
+}
 
-                Bson::Document(doc)
-            },
-            Cipher::String(value) => Bson::String(value),
-            Cipher::I32(value) => Bson::Int32(value),
-            Cipher::None => Bson::Null
+impl From<&String> for Cipher {
+    fn from(value: &String) -> Self {
+        match value.is_empty() {
+            true => Self::None,
+            false => Self::new(value)
+        }
+    }
+}
+
+impl From<&str> for Cipher {
+    fn from(value: &str) -> Self {
+        match value.is_empty() {
+            true => Self::None,
+            false => Self::new(value)
+        }
+    }
+}
+
+impl From<usize> for Cipher {
+    fn from(value: usize) -> Self {
+        match value == 0 {
+            true => Self::None,
+            false => Self::new(value)
+        }
+    }
+}
+
+impl From<i32> for Cipher {
+    fn from(value: i32) -> Self {
+        match value == 0 {
+            true => Self::None,
+            false => Self::new(value)
+        }
+    }
+}
+
+impl ToString for Cipher {
+    fn to_string(&self) -> String {
+        match self.set_to_string() {
+            Self::String(value) => value,
+            _ => String::new()
         }
     }
 }
 
 impl Cipher {
-    pub fn new<C>(content: C) -> Option<Self>
-        where C: ToString
+    pub fn new<T>(value: T) -> Self
+        where T: ToString
     {
-        Some(Self::Manager(Manager::new(content)))
+        Self::CipherManager(CipherManager::new(value))
     }
 
-    pub fn new_payload(content: &Payload) -> Option<Self> {
-        match content.clone().is_empty() {
-            true => None,
-            false => Some(Self::Payload(content.clone()))
-        }
-    }
-
-    pub fn new_string<C>(content: C) -> Option<Self>
-        where C: ToString
-    {
-        let content = content.to_string();
-        match content.is_empty() {
-            true => None,
-            false => Some(Self::String(content))
-        }
-    }
-
-    pub fn default_payload() -> Payload {
+    pub fn payload() -> Payload {
         Payload::default()
     }
 
-    pub fn encrypt_master(&self) -> Option<Self> {
-        match self.clone() {
-            Cipher::Manager(value) => Some(Self::Manager(value.encrypt(MASTER_KEY))),
-            Cipher::String(value) => Some(Self::Manager(Manager::new(value).encrypt(MASTER_KEY))),
-            Cipher::I32(value) => Some(Self::Manager(Manager::new(value.to_string()).encrypt(MASTER_KEY))),
-            _ => None
-        }
-    }
-
-    pub fn encrypt_web(&self) -> Option<Self> {
-        match self.clone() {
-            Cipher::Manager(value) => Some(Self::Manager(value.encrypt(WEB_KEY))),
-            Cipher::String(value) => Some(Self::Manager(Manager::new(value).encrypt(WEB_KEY))),
-            Cipher::I32(value) => Some(Self::Manager(Manager::new(value.to_string()).encrypt(WEB_KEY))),
-            _ => None
-        }
-    }
-
-    pub fn decrypt_master(&self) -> Option<Self> {
-        match self.clone() {
-            Cipher::Manager(value) => Some(Self::Manager(value.decrypt(MASTER_KEY))),
-            Cipher::String(value) => Some(Self::Manager(Manager::new(value).decrypt(MASTER_KEY))),
-            Cipher::I32(value) => Some(Self::Manager(Manager::new(value.to_string()).decrypt(MASTER_KEY))),
-            _ => None
-        }
-    }
-
-    pub fn decrypt_web(&self) -> Option<Self> {
-        match self.clone() {
-            Cipher::Manager(value) => Some(Self::Manager(value.decrypt(WEB_KEY))),
-            Cipher::String(value) => Some(Self::Manager(Manager::new(value).decrypt(WEB_KEY))),
-            Cipher::I32(value) => Some(Self::Manager(Manager::new(value.to_string()).decrypt(WEB_KEY))),
-            _ => None
-        }
-    }
-
-    pub fn to_i32(&self) -> Option<i32> {
-        match self.clone() {
-            Cipher::Manager(value) => {
-                match value.get_content() {
-                    None => None,
-                    Some(value) => {
-                        match value.parse::<i32>() {
-                            Ok(value) => Some(value),
-                            Err(_) => None,
-                        }
-                    }
-                }
+    pub fn encrypt_master(&self) -> Result<Self> {
+        match self.set_to_cipher() {
+            Self::CipherManager(value) => {
+                let value = value.encrypt(MASTER_KEY)?;
+                Ok(Self::CipherManager(value))
             },
-            Cipher::String(value) => {
-                match value.is_empty() {
-                    true => None,
-                    false => {
-                        match value.parse::<i32>() {
-                            Ok(value) => Some(value),
-                            Err(_) => None,
-                        }
-                    }
-                }
-            },
-            Cipher::I32(value) => Some(value),
-            _ => None
+            _ => Err(anyhow::anyhow!("Unable to encrypt with master key"))
         }
     }
 
-    pub fn get_cipher_i32(value: &Option<Self>) -> Option<Self> {
-        value.clone().unwrap_or(Self::None).to_i32().map(Self::I32)
-    }
-
-    pub fn to_string(&self) -> Option<String> {
-        match self.clone() {
-            Cipher::Manager(value) => value.get_content(),
-            Cipher::String(value) => {
-                match value.is_empty() {
-                    true => None,
-                    false => Some(value)
-                }
+    pub fn encrypt_web(&self) -> Result<Self> {
+        match self.set_to_cipher() {
+            Self::CipherManager(value) => {
+                let value = value.encrypt(WEB_KEY)?;
+                Ok(Self::CipherManager(value))
             },
-            Cipher::I32(value) => Some(value.to_string()),
-            _ => None
+            _ => Err(anyhow::anyhow!("Unable to encrypt with web key"))
         }
     }
 
-    pub fn get_cipher_string(value: &Option<Self>) -> Option<Self> {
-        value.clone().unwrap_or(Self::None).to_string().map(Self::String)
+    pub fn decrypt_master(&self) -> Result<Self> {
+        match self.set_to_cipher() {
+            Self::CipherManager(value) => {
+                let value = value.decrypt(MASTER_KEY)?;
+                Ok(Self::CipherManager(value))
+            },
+            _ => Err(anyhow::anyhow!("Unable to decrypt with master key"))
+        }
+    }
+
+    pub fn decrypt_web(&self) -> Result<Self> {
+        match self.set_to_cipher() {
+            Self::CipherManager(value) => {
+                let value = value.decrypt(WEB_KEY)?;
+                Ok(Self::CipherManager(value))
+            },
+            _ => Err(anyhow::anyhow!("Unable to decrypt with web key"))
+        }
     }
 }

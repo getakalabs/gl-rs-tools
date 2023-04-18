@@ -1,198 +1,118 @@
 pub mod prelude;
 
 use chrono::{DateTime as ChronoDateTime, Utc};
-pub use mongodb::bson::{oid::ObjectId, DateTime as BsonDateTime};
+use mongodb::bson::{oid::ObjectId, DateTime as BsonDateTime};
 
-use crate::{MongoArray, MongoObjectId, MongoDateTime, Payload};
+use crate::Payload;
 
 pub trait Decrypt {
-    fn decrypt(&self) -> Self;
+    fn decrypt(&self) -> Option<Self> where Self: Sized;
+}
+
+pub trait Dedup {
+    fn dedup(&self) -> Self where Self: Sized;
 }
 
 pub trait Encrypt {
-    fn encrypt(&self) -> Self;
+    fn encrypt(&self) -> Option<Self> where Self: Sized;
+}
+
+pub trait GetArrayObject<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> {
+    fn get_array_object(&self) -> Option<Vec<T>> where T: Sized;
 }
 
 pub trait GetArrayObjectId {
-    fn get_array_object_id(&self) -> Option<Vec<MongoObjectId>>;
+    fn get_array_object_id(&self) -> Vec<ObjectId>;
 }
 
 pub trait GetArrayString {
     fn get_array_string(&self) -> Option<Vec<String>>;
 }
 
-pub trait GetArrayValue<T: Clone + GetMongoObjectId + ToJson + ToBson> {
-    fn get_array_value(&self) -> Option<Vec<T>> where T: Sized;
+pub trait GetBool {
+    fn get_bool(&self) -> Option<bool>;
 }
 
-pub trait GetI32 {
-    fn get_i32(&self) -> Option<i32>;
+pub trait GetDateTimeBson {
+    fn get_date_time_bson(&self) -> Option<BsonDateTime>;
 }
 
-pub trait GetI64 {
-    fn get_i64(&self) -> Option<i64>;
+pub trait GetDateTimeChrono {
+    fn get_date_time_chrono(&self) -> Option<ChronoDateTime<Utc>>;
 }
 
 pub trait GetF64 {
     fn get_f64(&self) -> Option<f64>;
 }
 
-pub trait GetBool {
-    fn get_bool(&self) -> Option<bool>;
-}
-
-pub trait GetMongoArray {
-    fn get_mongo_array(&self) -> Option<MongoArray>;
-}
-
-pub trait GetMongoObjectId {
-    fn get_mongo_object_id(&self) -> Option<MongoObjectId>;
-}
-
-pub trait GetMongoDateTime {
-    fn get_mongo_date_time(&self) -> Option<MongoDateTime>;
+pub trait GetI32 {
+    fn get_i32(&self) -> Option<i32>;
 }
 
 pub trait GetObjectId {
     fn get_object_id(&self) -> Option<ObjectId>;
 }
 
-pub trait GetObjectIds {
-    fn get_object_ids(&self) -> Option<Vec<ObjectId>>;
-}
-
-pub trait GetSwapValue<T: Clone + GetMongoObjectId + ToJson + ToBson> {
-    fn get_swap_value(&self) -> Option<T> where T: Sized;
-}
-
-pub trait GetSwitchValue<T: Clone + PartialEq> {
-    fn get_switch_value(&self) -> Option<T> where T: Sized;
-}
-
 pub trait GetString {
-    fn get_string(&self) -> Option<Self> where Self: Sized;
+    fn get_string(&self) -> Option<String>;
 }
 
-pub trait GetStringId {
-    fn get_string_id(&self) -> Option<String>;
+pub trait GetSwap<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> {
+    fn get_swap(&self) -> Option<T> where T: Sized;
 }
 
-pub trait GetStringIds {
-    fn get_string_ids(&self) -> Option<Vec<String>>;
+pub trait IsEmpty {
+    fn is_empty(&self) -> bool;
 }
 
-pub trait GetBsonDateTime {
-    fn get_bson_date_time(&self) -> Option<BsonDateTime>;
+pub trait MutateClear {
+    fn mutate_clear(&self);
 }
 
-pub trait GetChronoDateTime {
-    fn get_chrono_date_time(&self) -> Option<ChronoDateTime<Utc>>;
-}
-
-pub trait GetStringDateTime {
-    fn get_string_date_time(&self) -> Option<String>;
-}
-
-pub trait GetSelf<T: Clone + IsEmpty> {
-    fn get_self(value: T) -> Option<T> where T: Sized {
-        match value.is_empty() {
-            true => None,
-            false => Some(value),
-        }
-    }
-}
-
-pub trait IsEmpty: Clone + Default + PartialEq {
-    fn is_empty(&self) -> bool {
-        self.clone() == Self::default()
-    }
+pub trait MutateUpdate {
+    fn mutate_update(&self, form: &Self) where Self: Sized;
 }
 
 pub trait Normalize {
-    fn normalize(&self) -> Self;
+    fn normalize(&self) -> Self where Self: Sized;
 }
 
-pub trait SetToBsonDateTime {
-    fn set_to_bson_date_time(&self) -> Self;
+pub trait SetToCipher {
+    fn set_to_cipher(&self) -> Self where Self: Sized;
 }
 
-pub trait SetToChronoDateTime {
-    fn set_to_chrono_date_time(&self) -> Self;
+pub trait SetToDateTimeBson {
+    fn set_to_date_time_bson(&self) -> Self where Self: Sized;
+}
+
+pub trait SetToDateTimeChrono {
+    fn set_to_date_time_chrono(&self) -> Self where Self: Sized;
 }
 
 pub trait SetToI32 {
-    fn set_to_i32(&self) -> Self;
-}
-
-pub trait SetToI64 {
-    fn set_to_i64(&self) -> Self;
-}
-
-pub trait SetToF64 {
-    fn set_to_f64(&self) -> Self;
-}
-
-pub trait SetToBool {
-    fn set_to_bool(&self) -> Self;
-}
-
-pub trait SetToMongoArray {
-    fn set_to_mongo_array(&self) -> Self;
-}
-
-pub trait SetToMongoObjectId {
-    fn set_to_mongo_object_id(&self) -> Self;
-}
-
-pub trait SetToMongoDateTime {
-    fn set_to_mongo_date_time(&self) -> Self;
-}
-
-pub trait SetToManager {
-    fn set_to_manager(&self) -> Self;
+    fn set_to_i32(&self) -> Self where Self: Sized;
 }
 
 pub trait SetToObjectId {
-    fn set_to_object_id(&self) -> Self;
-}
-
-pub trait SetToStringDateTime {
-    fn set_to_string_date_time(&self) -> Self;
-}
-
-pub trait SetToSwapValue {
-    fn set_to_swap_value(&self) -> Self;
+    fn set_to_object_id(&self) -> Self where Self: Sized;
 }
 
 pub trait SetToString {
-    fn set_to_string(&self) -> Self;
-}
-
-pub trait Src<T> {
-    fn src(value: T) -> Self;
+    fn set_to_string(&self) -> Self where Self: Sized;
 }
 
 pub trait ToBson {
     fn to_bson(&self) -> Option<Self> where Self: Sized;
 }
 
-pub trait ToBsonDateTime {
-    fn to_bson_date_time(&self) -> Option<BsonDateTime>;
-}
-
-pub trait ToChronoDateTime {
-    fn to_chrono_date_time(&self) -> Option<ChronoDateTime<Utc>>;
-}
-
 pub trait ToJson {
     fn to_json(&self) -> Option<Self> where Self: Sized;
 }
 
-pub trait ToOptString {
-    fn to_opt_string(&self) -> Option<String>;
+pub trait ToOption {
+    fn to_option(&self) -> Option<Self> where Self: Sized;
 }
 
 pub trait ToPayload {
-    fn to_payload(&self, code: u16) -> Payload;
+    fn to_payload(&self, code: usize) -> Payload;
 }
-

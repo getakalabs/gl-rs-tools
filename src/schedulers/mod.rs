@@ -1,9 +1,8 @@
 use actix::prelude::*;
 use chrono::Local;
 use cron_lib::Schedule;
+use mongodb::Database;
 use std::{fs, str::FromStr, path::Path, time::Duration};
-
-use crate::DBClient;
 
 fn duration_timer<T: Into<String>>(duration: T) -> Duration {
     let bindings = duration.into();
@@ -15,8 +14,7 @@ fn duration_timer<T: Into<String>>(duration: T) -> Duration {
     duration_until.to_std().unwrap()
 }
 
-
-fn delete_old_logs(logs_folder: &Path, expiry: i32, show_logs: bool) {
+fn delete_old_logs(logs_folder: &Path, expiry: usize, show_logs: bool) {
     if show_logs {
         let exp = match expiry > 1 {
             true => format!("{} days starting today", expiry.clone()),
@@ -46,13 +44,14 @@ fn delete_old_logs(logs_folder: &Path, expiry: i32, show_logs: bool) {
     }
 }
 
+#[derive(Default, Clone)]
 pub struct Scheduler {
-    pub db: DBClient,
+    pub database: Option<Database>,
     pub show_logs: bool,
     pub duration: String,
     pub directory: String,
-    pub expiry: i32,
-    pub func: fn(DBClient)
+    pub expiry: usize,
+    pub func: Option<fn(Database)>
 }
 
 
@@ -77,18 +76,50 @@ impl Actor for Scheduler {
 }
 
 impl Scheduler {
-    pub fn new<D1, D2>(db: &DBClient, func: fn(DBClient), show_logs:bool, duration: D1, directory: D2, expiry: i32) -> Self
-        where D1: Into<String>,
-              D2: Into<String>
-    {
-        Scheduler{
-            db: db.clone(),
-            show_logs,
-            duration: duration.into(),
-            directory: directory.into(),
-            expiry,
-            func
+    pub fn builder() -> Self {
+        Self {
+            ..Default::default()
         }
+    }
+
+    pub fn set_database(&self, database: &Database) -> Self {
+        let mut data = self.clone();
+        data.database = Some(database.clone());
+        data
+    }
+
+    pub fn set_show_logs(&self, show_logs: bool) -> Self {
+        let mut data = self.clone();
+        data.show_logs = show_logs;
+        data
+    }
+
+    pub fn set_duration<T>(&self, duration: T) -> Self
+        where T: ToString
+    {
+        let mut data = self.clone();
+        data.duration = duration.to_string();
+        data
+    }
+
+    pub fn set_directory<T>(&self, directory: T) -> Self
+        where T: ToString
+    {
+        let mut data = self.clone();
+        data.directory = directory.to_string();
+        data
+    }
+
+    pub fn set_expiry(&self, expiry: usize) -> Self {
+        let mut data = self.clone();
+        data.expiry = expiry;
+        data
+    }
+
+    pub fn set_func(&self, func: fn(Database)) -> Self {
+        let mut data = self.clone();
+        data.func = Some(func);
+        data
     }
 
     fn schedule_task(&self, ctx: &mut Context<Self>) {
@@ -99,7 +130,11 @@ impl Scheduler {
         let logs_folder = Path::new(&self.directory);
         delete_old_logs(logs_folder, self.expiry, self.show_logs);
 
-        (self.func)(self.db.clone());
+        if let Some(database) = &self.database {
+            if let Some(func) = self.func {
+                func(database.clone());
+            }
+        }
 
         ctx.run_later(duration_timer(&self.duration), move |this, ctx| {
             this.schedule_task(ctx)

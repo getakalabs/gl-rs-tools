@@ -1,6 +1,10 @@
 pub mod guards;
+pub mod useragents;
 
-pub use crate::middlewares::guards::Guard;
-pub use crate::middlewares::guards::GuardMiddleware;
-pub use crate::middlewares::guards::GuardOptions;
-pub use crate::middlewares::guards::GuardParams;
+pub use crate::middlewares::guards::CoreGuard;
+pub use crate::middlewares::guards::PermissionGuard;
+pub use crate::middlewares::guards::PermissionGuardOptions;
+pub use crate::middlewares::guards::PermissionGuardParams;
+
+pub use crate::middlewares::useragents::UserAgent;
+pub use crate::middlewares::useragents::UserAgentParser;

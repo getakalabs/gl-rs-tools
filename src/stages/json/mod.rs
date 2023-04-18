@@ -10,7 +10,10 @@ pub fn stage(json_limit: usize) -> JsonConfig {
         .limit(json_limit)
         .error_handler(|err, _req| {
             // Create new json response
-            let mut response = Payload::new(400);
+            let mut response = Payload {
+                code: Some(400),
+                ..Default::default()
+            };
 
             // Match error
             match err {

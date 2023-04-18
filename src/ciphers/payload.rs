@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-use crate::traits::prelude::*;
+use crate::traits::IsEmpty;
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Payload {
@@ -20,12 +20,6 @@ pub struct Payload {
 
 impl IsEmpty for Payload {
     fn is_empty(&self) -> bool {
-        self.clone() == Self::default()
-    }
-}
-
-impl Payload {
-    pub fn new() -> Self {
-        Self::default()
+        Self::default() == *self
     }
 }

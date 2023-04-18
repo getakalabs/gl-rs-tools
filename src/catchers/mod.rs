@@ -4,7 +4,6 @@ use handlebars::Handlebars;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use crate::constants::*;
 use crate::Payload;
 
 #[derive(Clone)]
@@ -52,10 +51,11 @@ pub async fn not_found_page(hbs: web::Data<Handlebars<'_>>) -> Result<HttpRespon
 
 // Create not found json
 pub async fn not_found_json() -> Payload {
-    let mut payload = Payload::new(404);
-    payload.error = String::from(PAGE_NOT_FOUND);
-
-    payload
+    Payload {
+        code: Some(404),
+        error: String::from("Not Found"),
+        ..Default::default()
+    }
 }
 
 // Create not found middleware

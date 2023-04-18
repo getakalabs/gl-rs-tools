@@ -1,20 +1,3 @@
 pub fn to_string_array<T: ToString>(value: &Option<Vec<T>>) -> Option<Vec<String>> {
-    let mut array:Vec<String> = Vec::new();
-
-    match value {
-        Some(value) => {
-            for item in value {
-                let i = item.to_string();
-                if !i.is_empty() {
-                    array.push(item.to_string());
-                }
-            }
-
-            match array.is_empty() {
-                true => None,
-                false => Some(array)
-            }
-        },
-        None => None
-    }
+    value.as_ref().map(|v| v.iter().filter_map(|item| if !item.to_string().is_empty() { Some(item.to_string()) } else { None }).collect())
 }

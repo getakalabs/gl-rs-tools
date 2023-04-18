@@ -1,82 +1,86 @@
+pub mod array;
+pub mod datetime;
+pub mod objectid;
+
+pub use actix_web::Result;
+pub use array::MongoArray;
+pub use datetime::MongoDateTime;
+pub use objectid::MongoObjectId;
+
 use mongodb::{Client, options::ClientOptions, Database};
 use std::env;
 
-// DBClient enum which will allows the actix web server to run with or without database connection
+use crate::Payload;
+use crate::traits::IsEmpty;
+
 #[derive(Debug, Clone)]
-pub enum DBClient {
-    MongoDB(Database),
-    Null
+pub enum MongoDBManager {
+    MongoDB(MongoDB),
+    None
 }
 
-// DBClient core implementations
-impl DBClient {
-    // Create new database instance
-    pub async fn new<DBU, DBN>(database_url: DBU, database_name: DBN) -> Self
-        where DBU: ToString,
-              DBN: ToString
-    {
-        match Self::get_config(database_url, database_name) {
-            None => {}
-            Some((database_url, database_name)) => {
-                match ClientOptions::parse(&database_url).await {
-                    Ok(client_options) => {
-                        match Client::with_options(client_options) {
-                            Ok(client) => return Self::MongoDB(client.database(&database_name)),
-                            Err(error) => println!("{error}")
-                        }
-                    }
-                    Err(error) => println!("{error}")
-                }
-            }
+impl IsEmpty for MongoDBManager {
+    fn is_empty(&self) -> bool {
+        match self {
+            MongoDBManager::MongoDB(_) => false,
+            MongoDBManager::None => true
         }
-
-        Self::Null
     }
+}
 
-    // Retrieve mongodb environment variables
-    pub fn get_config<DBU, DBN>(database_url: DBU, database_name: DBN) -> Option<(String, String)>
-        where DBU: ToString,
-              DBN: ToString
+#[derive(Debug, Clone)]
+pub struct MongoDB {
+    pub client: Client,
+    pub database: Database
+}
+
+impl From<(Client, String)> for MongoDB {
+    fn from((client, database): (Client, String)) -> Self {
+        let database = client.database(&database);
+
+        Self { client, database }
+    }
+}
+
+impl MongoDBManager {
+    pub async fn new<T, U>(url: T, name: U) -> Result<Self>
+        where T: ToString,
+              U: ToString
     {
-        // Retrieve database url from environment
-        let database_url = match env::var(database_url.to_string()) {
+        let url = match env::var(url.to_string()) {
             Ok(value) => value,
-            Err(_) => String::default()
+            Err(_) => return Err(Payload::error("Unable to retrieve database url"))
         };
 
-        // Retrieve database name from environment
-        let database_name = match env::var(database_name.to_string()) {
+        let name = match env::var(name.to_string()) {
             Ok(value) => value,
-            Err(_) => String::default()
+            Err(_) => return Err(Payload::error("Unable to retrieve database name"))
         };
 
-        // Check database url & name
-        match database_url.is_empty() || database_name.is_empty() {
-            false => Some((String::from(&database_url), String::from(&database_name))),
-            true => {
-                if database_url.is_empty() {
-                    println!("Unable to parse your database url from environment")
-                }
+        let options = match ClientOptions::parse(&url).await {
+            Ok(value) => value,
+            Err(error) => return Err(Payload::error(error))
+        };
 
-                if database_name.is_empty() {
-                    println!("Unable to parse your database name from environment")
-                }
+        let client = match Client::with_options(options) {
+            Ok(value) => value,
+            Err(error) => return Err(Payload::error(error))
+        };
 
-                None
-            }
+        Ok(Self::MongoDB(MongoDB::from((client, name))))
+    }
+
+    pub fn get(&self) -> Result<Database> {
+        match self {
+            Self::MongoDB(value) => Ok(value.database.clone()),
+            Self::None => Err(Payload::error("Unable to retrieve database"))
         }
     }
 
-    // Retrieve client with initialized database
-    pub fn get_db(&self) -> Option<Database> {
-        match self.clone() {
-            DBClient::MongoDB(database) => Some(database),
-            DBClient::Null => None
+    pub fn get_client(&self) -> Result<Client> {
+        match self {
+            Self::MongoDB(value) => Ok(value.client.clone()),
+            Self::None => Err(Payload::error("Unable to retrieve database client"))
         }
-    }
-
-    // Retrieve client with initialized database
-    pub fn get_client(&self) -> DBClient {
-        self.clone()
     }
 }

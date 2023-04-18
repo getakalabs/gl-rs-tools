@@ -1,4 +1,4 @@
-use serde_json::Value;
+use std::ops::Index;
 use slugify::slugify;
 use titlecase::titlecase;
 
@@ -80,36 +80,6 @@ pub fn get_extension_from_mime<T: ToString>(value: T) -> String {
     }
 }
 
-pub fn get_string(key: &str, params: Value) -> String {
-    // Retrieve value
-    let oval = params.get(key);
-    if oval.is_none() {
-        return String::new();
-    }
-
-    // Unwrap to string
-    match serde_json::from_str(oval.unwrap().to_string().as_str()) {
-        Ok(value) => value,
-        Err(_)=> String::new()
-    }
-}
-
-pub fn get_file_size(value: f64) -> String {
-    if value <= 1.0 {
-        return String::from("0 KB");
-    }
-
-    // Check size (truncate it to 2 decimal places)
-    let size  = value / 1024_f64;
-    let size = (size * 100f64).floor() / 100.0;
-
-    return match () {
-        _ if size < 1000.0 => format!("{size} KB"),
-        _ if size < 1000000.0 =>  format!("{} MB", ((size / 1000.0)  * 100f64).floor() / 100.0),
-        _ => format!("{} GB", ((size / 1000000.0) * 100f64).floor() / 100.0)
-    }
-}
-
 pub fn get_slug<T>(value: T) -> String
     where T: ToString
 {
@@ -119,8 +89,9 @@ pub fn get_slug<T>(value: T) -> String
 pub fn get_token<T: ToString + Copy>(value: T) -> Option<String> {
     let binding = value.to_string();
     let split = binding.split("Bearer").collect::<Vec<&str>>();
+
     if split.len() == 2 {
-        return Some(split[1].trim().to_string())
+        return Some(split.index(1).trim().to_string())
     }
 
     None

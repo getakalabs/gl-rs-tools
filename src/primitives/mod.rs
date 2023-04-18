@@ -1,19 +1,17 @@
-use mongodb::bson::Bson;
-use mongodb::bson::oid::ObjectId;
+use itertools::Itertools;
+use mongodb::bson::{oid::ObjectId, Bson};
 use serde::{Serialize, Deserialize};
+use std::str::FromStr;
 
 use crate::traits::prelude::*;
-use crate::MongoArray;
-use crate::traits::{SetToBool, SetToI64, SetToMongoArray};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Primitive {
-    I32(i32),
     I64(i64),
     F64(f64),
     Bool(bool),
-    MongoArray(MongoArray),
+    Array(Vec<Option<Primitive>>),
     String(String),
     None
 }
@@ -24,51 +22,100 @@ impl Default for Primitive {
     }
 }
 
-impl ToString for Primitive {
-    fn to_string(&self) -> String {
-        match self {
-            Self::I32(value) => value.to_string(),
-            Self::I64(value) => value.to_string(),
-            Self::F64(value) => value.to_string(),
-            Self::Bool(value) => match value {
-                true => String::from("true"),
-                false => String::from("false")
-            },
-            Self::MongoArray(value) => {
-                match serde_json::to_string(value) {
-                    Ok(value) => value,
-                    Err(_) => format!("{value:?}")
+impl Dedup for Primitive {
+    fn dedup(&self) -> Self {
+        match self.clone() {
+            Self::Array(array) => {
+                let mut data = Vec::new();
+
+                for item in array.clone() {
+                    if let Some(value) = item {
+                        if value.to_string().trim().to_lowercase().as_str() != "none" {
+                            data.push(value.to_string().trim().to_string());
+                        }
+                    }
                 }
-            }
-            Self::String(value) => value.clone(),
-            Self::None => String::from("None")
+
+                let old_array:Vec<_> = data.into_iter().unique().collect();
+                let mut new_array = Vec::new();
+
+                for item in old_array {
+                    new_array.push(Some(Primitive::String(item)));
+                }
+
+                Self::Array(new_array)
+            },
+            _ => self.clone()
         }
     }
 }
 
-impl ToOptString for Primitive {
-    fn to_opt_string(&self) -> Option<String> {
-        match self {
-            Self::I32(value) => Some(value.to_string()),
-            Self::I64(value) => Some(value.to_string()),
-            Self::F64(value) => Some(value.to_string()),
-            Self::Bool(value) => match value {
-                true => Some(String::from("true")),
-                false => Some(String::from("false"))
-            },
-            Self::MongoArray(value) => {
-                match serde_json::to_string(value) {
-                    Ok(value) => Some(value),
-                    Err(_) => None
+impl GetArrayString for Primitive {
+    fn get_array_string(&self) -> Option<Vec<String>> {
+        match self.clone() {
+            Self::Array(array) => {
+                let mut data = Vec::new();
+
+                for item in array {
+                    if let Some(value) = item {
+                        if !value.to_string().is_empty() {
+                            data.push(value.to_string());
+                        }
+                    }
                 }
-            }
-            Self::String(value) => Some(value.clone()),
-            Self::None => None
+
+                if !data.is_empty() {
+                    Some(data)
+                } else {
+                    None
+                }
+            },
+            _ => None
         }
     }
 }
 
-impl<T: IsEmpty> GetSelf<T> for Primitive {}
+impl GetBool for Primitive {
+    fn get_bool(&self) -> Option<bool> {
+        match self.clone() {
+            Self::Bool(value) => Some(value),
+            Self::String(value) => match value.to_lowercase().as_str() {
+                "true" => Some(true),
+                "false" => Some(false),
+                _ => None
+            },
+            _ => None
+        }
+    }
+}
+
+impl GetI32 for Primitive {
+    fn get_i32(&self) -> Option<i32> {
+        match self.clone() {
+            Self::I64(value) => Some(value as i32),
+            Self::F64(value) => Some(value as i32),
+            Self::String(value) => match value.parse::<i32>() {
+                Ok(value) => Some(value),
+                Err(_) => None
+            },
+            _ => None
+        }
+    }
+}
+
+impl GetF64 for Primitive {
+    fn get_f64(&self) -> Option<f64> {
+        match self.clone() {
+            Self::I64(value) => Some(value as f64),
+            Self::F64(value) => Some(value),
+            Self::String(value) => match value.parse::<f64>() {
+                Ok(value) => Some(value),
+                Err(_) => None
+            },
+            _ => None
+        }
+    }
+}
 
 impl IsEmpty for Primitive {
     fn is_empty(&self) -> bool {
@@ -89,20 +136,16 @@ impl IsEmpty for Primitive {
 impl From<Primitive> for Bson {
     fn from(value: Primitive) -> Self {
         match value {
-            Primitive::I32(value) => Bson::Int32(value),
             Primitive::I64(value) => Bson::Int64(value),
             Primitive::F64(value) => Bson::Double(value),
             Primitive::Bool(value) => Bson::Boolean(value),
-            Primitive::MongoArray(value) => Bson::from(value),
             Primitive::String(value) => Bson::String(value),
+            Primitive::Array(value) => Bson::Array(value.into_iter().map(|value| match value {
+                Some(value) => Bson::from(value),
+                None => Bson::Null
+            }).collect()),
             Primitive::None => Bson::Null
         }
-    }
-}
-
-impl From<String> for Primitive {
-    fn from(value: String) -> Self {
-        Self::String(value)
     }
 }
 
@@ -113,17 +156,32 @@ impl From<Vec<String>> for Primitive {
             false => {
                 let mut array = Vec::new();
                 for item in value {
-                    array.push(Some(item));
+                    array.push(Some(Primitive::String(item)));
                 }
-                Self::MongoArray(MongoArray::String(array))
+                Self::Array(array)
             }
         }
     }
 }
 
+impl From<String> for Primitive {
+    fn from(value: String) -> Self {
+        match value.trim().is_empty() {
+            true => Self::None,
+            false => Self::String(value)
+        }
+    }
+}
+
+impl From<&str> for Primitive {
+    fn from(value: &str) -> Self {
+        Self::from(value.to_string())
+    }
+}
+
 impl From<i32> for Primitive {
     fn from(value: i32) -> Self {
-        Self::I32(value)
+        Self::I64(value as i64)
     }
 }
 
@@ -133,173 +191,63 @@ impl From<f64> for Primitive {
     }
 }
 
-impl GetArrayString for Primitive {
-    fn get_array_string(&self) -> Option<Vec<String>> {
-        match self.set_to_mongo_array() {
-            Self::MongoArray(value) => value.get_array_string(),
-            _ => None
-        }
-    }
-}
-
-impl GetI32 for Primitive {
-    fn get_i32(&self) -> Option<i32> {
-        match self.set_to_i32() {
-            Self::I32(value) => Some(value),
-            Self::I64(value) => Some(value as i32),
-            Self::F64(value) => Some(value as i32),
-            Self::String(value) => match value.parse::<i32>() {
-                Ok(value) => Some(value),
-                Err(_) => None
-            },
-            _ => None
-        }
-    }
-}
-
-impl GetI64 for Primitive {
-    fn get_i64(&self) -> Option<i64> {
-        match self.set_to_i64() {
-            Self::I32(value) => Some(value as i64),
-            Self::I64(value) => Some(value),
-            Self::F64(value) => Some(value as i64),
-            Self::String(value) => match value.parse::<i64>() {
-                Ok(value) => Some(value),
-                Err(_) => None
-            },
-            _ => None
-        }
-    }
-}
-
-impl GetF64 for Primitive {
-    fn get_f64(&self) -> Option<f64> {
-        match self.set_to_f64() {
-            Self::I32(value) => Some(value as f64),
-            Self::I64(value) => Some(value as f64),
-            Self::F64(value) => Some(value),
-            Self::String(value) => match value.parse::<f64>() {
-                Ok(value) => Some(value),
-                Err(_) => None
-            },
-            _ => None
-        }
-    }
-}
-
-impl GetBool for Primitive {
-    fn get_bool(&self) -> Option<bool> {
-        match self.set_to_bool() {
-            Self::Bool(value) => Some(value),
-            _ => None
-        }
-    }
-}
-
-impl GetMongoArray for Primitive {
-    fn get_mongo_array(&self) -> Option<MongoArray> {
-        match self.set_to_mongo_array() {
-            Self::MongoArray(value) => Some(value),
-            _ => None
-        }
-    }
-}
-
-impl GetObjectIds for Primitive {
-    fn get_object_ids(&self) -> Option<Vec<ObjectId>> {
-        match self.set_to_mongo_array() {
-            Self::MongoArray(value) => value.get_object_ids(),
-            _ => None
-        }
-    }
-}
-
-impl SetToI32 for Primitive {
-    fn set_to_i32(&self) -> Self {
+impl ToBson for Primitive {
+    fn to_bson(&self) -> Option<Self> {
         match self.clone() {
-            Self::I32(value) => Self::I32(value),
-            Self::I64(value) => Self::I32(value as i32),
-            Self::F64(value) => Self::I32(value as i32),
-            Self::String(value) => match value.parse::<i32>() {
-                Ok(value) => Self::I32(value),
-                Err(_) => Self::None
+            Self::I64(value) => Some(Self::I64(value)),
+            Self::F64(value) => Some(Self::F64(value)),
+            Self::Bool(value) => Some(Self::Bool(value)),
+            Self::String(value) => match ObjectId::from_str(value.as_str()) {
+                Ok(value) => Some(Self::String(value.to_hex())),
+                Err(_) => Some(Self::String(value))
             },
-            _ => Self::I32(0)
-        }
-    }
-}
+            Self::Array(value) => {
+                let mut data = Vec::new();
 
-impl SetToI64 for Primitive {
-    fn set_to_i64(&self) -> Self {
-        match self.clone() {
-            Self::I32(value) => Self::I64(value as i64),
-            Self::I64(value) => Self::I64(value),
-            Self::F64(value) => Self::I64(value as i64),
-            Self::String(value) => match value.parse::<i64>() {
-                Ok(value) => Self::I64(value),
-                Err(_) => Self::None
-            },
-            _ => Self::None
-        }
-    }
-}
-
-impl SetToF64 for Primitive {
-    fn set_to_f64(&self) -> Self {
-        match self.clone() {
-            Self::I32(value) => Self::F64(value as f64),
-            Self::I64(value) => Self::F64(value as f64),
-            Self::F64(value) => Self::F64(value),
-            Self::String(value) => match value.parse::<f64>() {
-                Ok(value) => Self::F64(value),
-                Err(_) => Self::None
-            },
-            _ => Self::None
-        }
-    }
-}
-
-impl SetToBool for Primitive {
-    fn set_to_bool(&self) -> Self {
-        match self.clone() {
-            Self::Bool(value) => Self::Bool(value),
-            Self::String(value) => match value.to_lowercase().as_str() {
-                "true" => Self::Bool(true),
-                "false" => Self::Bool(false),
-                _ => Self::None
-            },
-            _ => Self::None
-        }
-    }
-}
-
-impl SetToMongoArray for Primitive {
-    fn set_to_mongo_array(&self) -> Self {
-        match self.clone() {
-            Self::MongoArray(value) => Self::MongoArray(value),
-            Self::String(value) => {
-                let value = serde_json::from_str::<Vec<Option<String>>>(&value);
-                match value {
-                    Ok(value) => Self::MongoArray(MongoArray::String(value)),
-                    Err(_) => Self::None
+                for item in value {
+                    if let Some(value) = item {
+                        data.push(value.to_bson());
+                    }
                 }
+
+                Some(Self::Array(data))
             },
-            _ => Self::None
+            _ => None
         }
     }
 }
 
-impl SetToString for Primitive {
-    fn set_to_string(&self) -> Self {
+impl ToJson for Primitive {
+    fn to_json(&self) -> Option<Self> {
         match self.clone() {
-            Self::I32(value) => Self::String(value.to_string()),
-            Self::I64(value) => Self::String(value.to_string()),
-            Self::Bool(value) => match value {
-                true => Self::String(String::from("true")),
-                false => Self::String(String::from("false"))
+            Self::I64(value) => Some(Self::I64(value)),
+            Self::F64(value) => Some(Self::F64(value)),
+            Self::Bool(value) => Some(Self::Bool(value)),
+            Self::String(value) => Some(Self::String(value)),
+            Self::Array(value) => {
+                let mut data = Vec::new();
+
+                for item in value {
+                    if let Some(value) = item {
+                        data.push(value.to_json());
+                    }
+                }
+
+                Some(Self::Array(data))
             },
-            Self::String(value) => Self::String(value),
-            _ => Self::None
+            _ => None
+        }
+    }
+}
+
+impl ToString for Primitive {
+    fn to_string(&self) -> String {
+        match self.clone() {
+            Self::I64(value) => value.to_string(),
+            Self::F64(value) => value.to_string(),
+            Self::Bool(value) => value.to_string(),
+            Self::String(value) => value.to_string(),
+            _ => "None".to_string()
         }
     }
 }
