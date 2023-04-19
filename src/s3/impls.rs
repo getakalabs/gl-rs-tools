@@ -239,7 +239,7 @@ impl S3 {
             bucket: self.bucket.clone().map_or(String::default(), |d| d.to_string()),
             key: format!("{}/{}", self.path.clone().map_or(String::default(), |d| d.to_string()), filename.clone()),
             body: Some(data.clone().into()),
-            acl: Some("public-read".to_owned()),
+            // acl: Some("public-read".to_owned()),
             content_type: Some(mime.clone()),
             ..Default::default()
         };
@@ -352,7 +352,7 @@ impl S3 {
             bucket: self.bucket.clone().map_or(String::default(), |d| d.to_string()),
             key: format!("{}/{}", self.path.clone().map_or(String::default(), |d| d.to_string()), filename.clone()),
             body: Some(data.clone().into()),
-            acl: Some("public-read".to_owned()),
+            // acl: Some("public-read".to_owned()),
             content_type: Some(mime.clone()),
             ..Default::default()
         };
@@ -504,7 +504,7 @@ impl S3 {
             bucket: self.bucket.clone().map_or(String::default(), |d| d.to_string()),
             key: format!("{}/{}", self.path.clone().map_or(String::default(), |d| d.to_string()), filename),
             body: Some(buffer.clone().into()),
-            acl: Some("public-read".to_owned()),
+            // acl: Some("public-read".to_owned()),
             content_type: Some(mime),
             ..Default::default()
         };
@@ -587,7 +587,7 @@ impl S3 {
             bucket: self.bucket.clone().map_or(String::default(), |d| d.to_string()),
             key: format!("{}/{}", self.path.clone().map_or(String::default(), |d| d.to_string()), filename),
             body: Some(buffer.clone().into()),
-            acl: Some("public-read".to_owned()),
+            // acl: Some("public-read".to_owned()),
             content_type: Some(mime),
             ..Default::default()
         };
@@ -667,7 +667,7 @@ impl S3 {
             bucket: self.bucket.clone().map_or(String::default(), |d| d.to_string()),
             key: format!("{}/doc.txt", self.path.clone().map_or(String::default(), |d| d.to_string())),
             body: Some(contents.into()),
-            acl: Some("public-read".to_owned()),
+            // acl: Some("public-read".to_owned()),
             content_type: mime,
             ..Default::default()
         };
