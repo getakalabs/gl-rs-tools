@@ -31,7 +31,7 @@ impl <T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> G
 impl <T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> GetObjectId for Swap<T> {
     fn get_object_id(&self) -> Option<ObjectId> {
         match self {
-            Self::ObjectId(value) => Some(value.clone()),
+            Self::ObjectId(value) => Some(*value),
             Self::Swap(value) => value.get_object_id(),
             Self::String(value) => match ObjectId::from_str(value) {
                 Ok(value) => Some(value),
@@ -78,9 +78,9 @@ impl <T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> T
 impl <T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> ToBson for Swap<T> {
     fn to_bson(&self) -> Option<Self> {
         match self {
-            Self::ObjectId(value) => Some(Self::ObjectId(value.clone())),
+            Self::ObjectId(value) => Some(Self::ObjectId(*value)),
             Self::Swap(value) => match value.get_object_id() {
-                Some(value) => Some(Self::ObjectId(value.clone())),
+                Some(value) => Some(Self::ObjectId(value)),
                 None => Some(Self::Swap(value.clone()))
             },
             Self::String(value) => match ObjectId::from_str(value) {

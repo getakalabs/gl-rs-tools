@@ -7,16 +7,16 @@ use serde::{Serialize, Deserialize};
 pub struct Payload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<u16>,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub challenge: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub message: String,
-    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
-    pub data: serde_json::Value,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub error: String,
-    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
-    pub errors: serde_json::Value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub challenge: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<serde_json::Value>
 }
 
 impl Responder for Payload {
@@ -28,7 +28,7 @@ impl Responder for Payload {
         let mut code = 400;
         match () {
             _ if self.code.as_ref().is_some() => code = *self.code.as_ref().unwrap() as i32,
-            _ if self.code.as_ref().is_none() && !self.challenge.is_empty() => code = 200,
+            _ if self.code.as_ref().is_none() && !self.challenge.unwrap_or_default().is_empty() => code = 200,
             _ => ()
         }
 
@@ -63,7 +63,7 @@ impl error::ResponseError for Payload {
         let mut code = 400;
         match () {
             _ if self.code.as_ref().is_some() => code = *self.code.as_ref().unwrap() as i32,
-            _ if self.code.as_ref().is_none() && !self.challenge.is_empty() => code = 200,
+            _ if self.code.as_ref().is_none() && !self.challenge.clone().unwrap_or_default().is_empty() => code = 200,
             _ => ()
         }
 
@@ -86,8 +86,8 @@ impl Payload {
     {
         Self {
             code: Some(code as u16),
-            data: serde_json::to_value(data)
-                .unwrap_or(serde_json::Value::Null),
+            data: Some(serde_json::to_value(data)
+                .unwrap_or(serde_json::Value::Null)),
             ..Default::default()
         }
     }
@@ -102,7 +102,7 @@ impl Payload {
 
         Self {
             code,
-            error,
+            error: Some(error),
             ..Default::default()
         }.into()
     }
@@ -112,8 +112,8 @@ impl Payload {
     {
         Self {
             code: Some(400),
-            errors: serde_json::to_value(error)
-                .unwrap_or(serde_json::Value::Null),
+            errors: Some(serde_json::to_value(error)
+                .unwrap_or(serde_json::Value::Null)),
             ..Default::default()
         }.into()
     }
@@ -121,7 +121,7 @@ impl Payload {
     pub fn success<T: ToString>(message: T) -> Self {
         Self {
             code: Some(200),
-            message: message.to_string(),
+            message: Some(message.to_string()),
             ..Default::default()
         }
     }
@@ -129,7 +129,7 @@ impl Payload {
     pub fn authentication_expired() -> HttpResponse {
         let payload = Self {
             code: Some(401),
-            error: String::from("Authentication token expired"),
+            error: Some(String::from("Authentication token expired")),
             ..Default::default()
         };
 
@@ -141,7 +141,7 @@ impl Payload {
     pub fn database() -> HttpResponse {
         let payload = Self {
             code: Some(400),
-            error: String::from("Invalid database configuration"),
+            error: Some(String::from("Invalid database configuration")),
             ..Default::default()
         };
 
@@ -153,7 +153,7 @@ impl Payload {
     pub fn middleware() -> HttpResponse {
         let payload = Self {
             code: Some(400),
-            error: String::from("Missing middleware. Please configure your server properly"),
+            error: Some(String::from("Missing middleware. Please configure your server properly")),
             ..Default::default()
         };
 

@@ -28,11 +28,9 @@ impl Dedup for Primitive {
             Self::Array(array) => {
                 let mut data = Vec::new();
 
-                for item in array.clone() {
-                    if let Some(value) = item {
-                        if value.to_string().trim().to_lowercase().as_str() != "none" {
-                            data.push(value.to_string().trim().to_string());
-                        }
+                for item in array.into_iter().flatten() {
+                    if item.to_string().trim().to_lowercase().as_str() != "none" {
+                        data.push(item.to_string().trim().to_string());
                     }
                 }
 
@@ -56,11 +54,9 @@ impl GetArrayString for Primitive {
             Self::Array(array) => {
                 let mut data = Vec::new();
 
-                for item in array {
-                    if let Some(value) = item {
-                        if !value.to_string().is_empty() {
-                            data.push(value.to_string());
-                        }
+                for item in array.into_iter().flatten() {
+                    if !item.to_string().is_empty() {
+                        data.push(item.to_string());
                     }
                 }
 
@@ -204,10 +200,8 @@ impl ToBson for Primitive {
             Self::Array(value) => {
                 let mut data = Vec::new();
 
-                for item in value {
-                    if let Some(value) = item {
-                        data.push(value.to_bson());
-                    }
+                for item in value.into_iter().flatten() {
+                    data.push(item.to_bson());
                 }
 
                 Some(Self::Array(data))
@@ -227,10 +221,8 @@ impl ToJson for Primitive {
             Self::Array(value) => {
                 let mut data = Vec::new();
 
-                for item in value {
-                    if let Some(value) = item {
-                        data.push(value.to_json());
-                    }
+                for item in value.into_iter().flatten() {
+                    data.push(item.to_json());
                 }
 
                 Some(Self::Array(data))
@@ -246,7 +238,7 @@ impl ToString for Primitive {
             Self::I64(value) => value.to_string(),
             Self::F64(value) => value.to_string(),
             Self::Bool(value) => value.to_string(),
-            Self::String(value) => value.to_string(),
+            Self::String(value) => value,
             _ => "None".to_string()
         }
     }

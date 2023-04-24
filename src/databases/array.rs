@@ -26,11 +26,9 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> De
             Self::Array(array) => {
                 let mut data = Vec::new();
 
-                for item in array.clone() {
-                    if let Some(value) = item {
-                        if value.to_string().trim().to_lowercase().as_str() != "none" {
-                            data.push(value.to_string().trim().to_string());
-                        }
+                for item in array.into_iter().flatten() {
+                    if item.to_string().trim().to_lowercase().as_str() != "none" {
+                        data.push(item.to_string().trim().to_string());
                     }
                 }
 
@@ -99,10 +97,8 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> Ge
             Self::Array(data) => {
                 let mut array = Vec::new();
 
-                for item in data {
-                    if let Some(item) = item {
-                        array.push(item.clone().get_swap().unwrap_or_default())
-                    }
+                for item in data.iter().flatten() {
+                    array.push(item.clone().get_swap().unwrap_or_default())
                 }
 
                 match array.is_empty() {
@@ -123,11 +119,8 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> Ge
 
                 for item in data {
                     match item {
-                        Some(item) => {
-                            match item.get_object_id() {
-                                Some(id) => array.push(id),
-                                None => {}
-                            }
+                        Some(item) => if let Some(id) = item.get_object_id() {
+                            array.push(id)
                         },
                         None => {}
                     }
@@ -138,10 +131,9 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> Ge
             Self::String(data) => {
                 let mut array = Vec::new();
 
-                for item in data.split(",") {
-                    match ObjectId::from_str(item) {
-                        Ok(id) => array.push(id),
-                        Err(_) => {}
+                for item in data.split(',') {
+                    if let Ok(id) = ObjectId::from_str(item) {
+                        array.push(id)
                     }
                 }
 
@@ -158,11 +150,9 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> Ge
             Self::Array(array) => {
                 let mut data = Vec::new();
 
-                for item in array {
-                    if let Some(value) = item {
-                        if !value.to_string().is_empty() {
-                            data.push(value.to_string());
-                        }
+                for item in array.into_iter().flatten() {
+                    if !item.to_string().is_empty() {
+                        data.push(item.to_string());
                     }
                 }
 
@@ -174,7 +164,7 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> Ge
             Self::String(data) => {
                 match data.is_empty() {
                     true => None,
-                    false => Some(data.split(",").map(|x| x.to_string()).collect())
+                    false => Some(data.split(',').map(|x| x.to_string()).collect())
                 }
             },
             Self::None => None
@@ -203,9 +193,8 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> To
                         Some(item) => {
                             match item.to_bson() {
                                 Some(item) => array.push(Some(item)),
-                                None => match item.get_object_id() {
-                                    Some(id) => array.push(Some(Swap::ObjectId(id))),
-                                    None => {}
+                                None => if let Some(id) = item.get_object_id() {
+                                    array.push(Some(Swap::ObjectId(id)))
                                 }
                             }
                         },
@@ -238,9 +227,8 @@ impl<T:Clone + GetObjectId + ToJson + ToBson + IsEmpty + PartialEq + Default> To
                 for item in data {
                     match item {
                         Some(item) => {
-                            match item.to_json() {
-                                Some(item) => array.push(Some(item)),
-                                None => {}
+                            if let Some(item) = item.to_json() {
+                                array.push(Some(item))
                             }
                         },
                         None => {}

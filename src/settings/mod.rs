@@ -374,8 +374,8 @@ impl ToPayload for Settings {
         };
 
         match code {
-            200 => payload.data = serde_json::to_value(self.clone()).unwrap(),
-            _ => payload.errors = serde_json::to_value(self.clone()).unwrap()
+            200 => payload.data = Some(serde_json::to_value(self.clone()).unwrap()),
+            _ => payload.errors = Some(serde_json::to_value(self.clone()).unwrap())
         }
 
         payload

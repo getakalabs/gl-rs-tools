@@ -53,7 +53,7 @@ pub async fn not_found_page(hbs: web::Data<Handlebars<'_>>) -> Result<HttpRespon
 pub async fn not_found_json() -> Payload {
     Payload {
         code: Some(404),
-        error: String::from("Not Found"),
+        error: Some(String::from("Not Found")),
         ..Default::default()
     }
 }
