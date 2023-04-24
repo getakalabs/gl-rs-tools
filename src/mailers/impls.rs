@@ -87,7 +87,7 @@ impl Mailer {
 
         // Send the email
         match mailer.send(&builder) {
-            Ok(_) => Ok(format!("Email send successfully to {to}")),
+            Ok(_) => Ok(format!("Email sent successfully to {to}")),
             Err(error) => Err(Payload::error(&error)),
         }
     }

@@ -1,8 +1,8 @@
 use actix_web::Result;
-use mongodb::{bson::{doc, from_document, Bson, oid::ObjectId, Document}, Collection};
+use mongodb::{bson::{doc, from_document, Bson, oid::ObjectId, Document, Regex}, options::AggregateOptions, Collection};
 use serde::de::DeserializeOwned;
 use std::str::FromStr;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 
 use crate::traits::*;
 use crate::Payload;
@@ -19,6 +19,24 @@ impl Pipeline {
 
     pub fn build(&self) -> Vec<Document> {
         self.queries.clone()
+    }
+
+    pub async fn aggregate_result_many<T>(&self,  collection: &Collection<T>) -> Result<Vec<T>>
+        where T: IsEmpty + DeserializeOwned + ToJson + Default
+    {
+        let  cursor = match collection.clone().aggregate(self.queries.to_owned(), AggregateOptions::builder().build()).await {
+            Ok(cursor) => cursor,
+            Err(error) => return Err(Payload::error(error))
+        };
+
+        let data = cursor.map_ok(|value| {
+            from_document::<T>(value).unwrap_or_default().to_json().unwrap_or_default()
+        }).try_collect::<Vec<T>>().await;
+
+        match data {
+            Ok(data) => Ok(data),
+            Err(error) => Err(Payload::error(error))
+        }
     }
 
     pub async fn aggregate_result_one<T>(&self,  collection: &Collection<T>) -> Result<T>
@@ -168,6 +186,59 @@ impl Pipeline {
         self
     }
 
+    pub fn match_and_in<T, U>(&mut self, field:T, values: Vec<U>, is_object_id: bool, status: Option<Vec<String>>) -> &mut Self
+        where T: ToString,
+              U: ToString
+    {
+        let field = field.to_string();
+        let mut array = Vec::new();
+
+        match is_object_id {
+            true => {
+                let mut items = Vec::new();
+
+                for i in values {
+                    let item = i.to_string().trim().to_string();
+
+                    if let Ok(value) = ObjectId::from_str(&item) {
+                        items.push(value)
+                    }
+                }
+
+                if !items.is_empty() {
+                    array.push(doc!{ field: { "$in": items} })
+                }
+            },
+            false => {
+                let mut items = Vec::new();
+
+                for i in values {
+                    let item = i.to_string().trim().to_string();
+
+                    items.push(Regex{ pattern: item, options: "i".to_string() })
+                }
+
+                if !items.is_empty() {
+                    array.push(doc!{ field: { "$in": items} })
+                }
+            }
+        };
+
+        if let Some(status) = status {
+            array.push(doc!{ "status": { "$in": status.iter().map(|s| s.to_string()).collect::<Vec<String>>() } });
+        }
+
+        if !array.is_empty() {
+            self.queries.push(doc!{
+                "$match": {
+                    "$and": array
+                }
+            });
+        }
+
+        self
+    }
+
     pub fn match_or<T, U>(&mut self, fields: Vec<(T, U, bool)>, status: Option<Vec<String>>) -> &mut Self
         where T: ToString,
               U: ToString
@@ -215,6 +286,18 @@ impl Pipeline {
         self
     }
 
+    pub fn replace_root<T>(&mut self, new_root: T) -> &mut Self
+        where T: ToString
+    {
+        self.queries.push(doc! {
+            "$replaceRoot": {
+                "newRoot": new_root.to_string()
+            }
+        });
+
+        self
+    }
+
     pub fn slug<V, S>(&mut self, value: V, status: &[S]) -> &mut Self
         where V: ToString,
               S: ToString
@@ -251,6 +334,18 @@ impl Pipeline {
             "$unwind": {
                 "path": field.to_string(),
                 "preserveNullAndEmptyArrays": preserve_null
+            }
+        });
+
+        self
+    }
+
+    pub fn unwind_path<T>(&mut self, field: T) -> &mut Self
+        where T: ToString
+    {
+        self.queries.push(doc! {
+            "$unwind": {
+                "path": field.to_string()
             }
         });
 
