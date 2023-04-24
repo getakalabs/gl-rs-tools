@@ -39,6 +39,44 @@ impl Pipeline {
         }
     }
 
+    pub async fn aggregate_result_many_string<T, U>(&self,  collection: &Collection<T>, key: U) -> Result<Vec<String>>
+        where T: IsEmpty + DeserializeOwned + ToJson + Default,
+              U: ToString
+    {
+        let  cursor = match collection.clone().aggregate(self.queries.to_owned(), AggregateOptions::builder().build()).await {
+            Ok(cursor) => cursor,
+            Err(error) => return Err(Payload::error(error))
+        };
+
+        let data = cursor.map_ok(|value| {
+            value.get(&key.to_string()).and_then(Bson::as_str).unwrap_or_default().to_owned()
+        }).try_collect::<Vec<String>>().await;
+
+        match data {
+            Ok(data) => Ok(data),
+            Err(error) => Err(Payload::error(error))
+        }
+    }
+
+    pub async fn aggregate_result_many_i64<T, U>(&self,  collection: &Collection<T>, key: U) -> Result<Vec<i64>>
+        where T: IsEmpty + DeserializeOwned + ToJson + Default,
+              U: ToString
+    {
+        let  cursor = match collection.clone().aggregate(self.queries.to_owned(), AggregateOptions::builder().build()).await {
+            Ok(cursor) => cursor,
+            Err(error) => return Err(Payload::error(error))
+        };
+
+        let data = cursor.map_ok(|value| {
+            value.get(&key.to_string()).and_then(Bson::as_i64).unwrap_or_default().to_owned()
+        }).try_collect::<Vec<i64>>().await;
+
+        match data {
+            Ok(data) => Ok(data),
+            Err(error) => Err(Payload::error(error))
+        }
+    }
+
     pub async fn aggregate_result_one<T>(&self,  collection: &Collection<T>) -> Result<T>
         where T: IsEmpty + DeserializeOwned,
     {
