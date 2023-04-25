@@ -134,7 +134,7 @@ impl S3 {
             key: format!("{}/{}", self.path.clone().map_or(String::default(), |d| d.to_string()), bindings),
             ..Default::default()
         }).await {
-            Err(_) => Err(Payload::error("Unable to retrieve your file")),
+            Err(err) => Err(Payload::error(format!("Unable to retrieve your file: {err}"))),
             Ok(data) => {
                 let bytes = data.body.unwrap().map_ok(|b| BytesMut::from(&b[..]))
                     .try_concat()
