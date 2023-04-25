@@ -200,7 +200,7 @@ impl Pipeline {
                     Err(_) => array.push(doc!{ field.clone(): { "$exists": false } })
                 },
                 false => match value.trim().is_empty() {
-                    false => match field.as_str() == "name" {
+                    false => match field.as_str() == "name" || field.as_str() == "parents.name" {
                         true => array.push(doc!{ field.clone(): { "$regex": value.to_lowercase().to_string(), "$options": "i" } }),
                         false => array.push(doc!{ field.clone(): value.to_string() })
                     },
